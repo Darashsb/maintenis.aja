@@ -16,15 +16,15 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* River Blue */
-        .bg-river { background-color: #3b82f6; } /* Royal/River Blue */
-        .text-river { color: #1e3a8a; }
-        .border-river { border-color: #3b82f6; }
+        /* Updated River Blue */
+        .bg-river { background-color: #73b0d9; } 
+        .text-river { color: #73b0d9; }
+        .border-river { border-color: #73b0d9; }
         
-        /* Highland Green */
-        .bg-highland { background-color: #1b5e20; }
-        .text-highland { color: #1b5e20; }
-        .border-highland { border-color: #1b5e20; }
+        /* Updated Highland Green */
+        .bg-highland { background-color: #2d634f; }
+        .text-highland { color: #2d634f; }
+        .border-highland { border-color: #2d634f; }
 
         /* Dark Navy for Nav */
         .bg-navy { background-color: #0f172a; }
@@ -55,12 +55,16 @@
             const [isLoading, setIsLoading] = useState(false);
 
             const ADMIN_PASSWORD = "darashsb6385"; 
-            const pricePerHour = 300000;
             const adminWhatsApp = "6281385516385";
             const bankAccount = "Seabank 901703344188 a.n Dara Saliha Hasibuan";
-            const qrisImageUrl = "qris.jpg";
+            // Placeholder gambar QRIS
+            const qrisImageUrl = "https://placehold.co/400x600/0f172a/ffffff?text=Scan+QRIS+Di+Sini";
 
-            const [formData, setFormData] = useState({ name: '', wa: '', date: '', time: '', duration: 1 });
+            // Tambahkan classType (default: private)
+            const [formData, setFormData] = useState({ classType: 'private', name: '', wa: '', date: '', time: '', duration: 1 });
+
+            // Fungsi untuk mendapatkan harga dinamis berdasarkan tipe kelas
+            const getPricePerHour = (type) => type === 'private' ? 300000 : 130000;
 
             // Ambil data dari Firebase
             const fetchBookings = useCallback(async () => {
@@ -119,7 +123,6 @@
                 setIsLoading(false);
             };
 
-            // Update Status (Optimistic UI)
             const updateStatus = async (id, newStatus) => {
                 const oldBookings = [...bookings];
                 setBookings(bookings.map(b => b.id === id ? {...b, status: newStatus} : b));
@@ -136,12 +139,10 @@
                 }
             };
 
-            // Benar-benar menghapus antrean dari Firebase
             const deleteBooking = async (id, isSelesai = false) => {
                 const confirmMsg = isSelesai ? "Tandai selesai & hapus permanen?" : "Hapus pesanan ini secara permanen?";
                 if(window.confirm(confirmMsg)) {
                     const oldBookings = [...bookings];
-                    // Update tampilan lokal dulu biar cepet
                     setBookings(bookings.filter(b => b.id !== id));
 
                     try {
@@ -150,7 +151,6 @@
                         });
                         if (!response.ok) throw new Error();
                     } catch (err) {
-                        // Kalo gagal hapus di server, balikin tampilan lokalnya
                         setBookings(oldBookings);
                         alert("Gagal menghapus antrean dari server.");
                     }
@@ -158,10 +158,12 @@
             };
 
             const handleWhatsApp = () => {
-                const totalBiaya = successData.duration * pricePerHour;
-                const message = `Halo Admin! Saya ${successData.name} mau request jadwal tenis:%0A%0ATanggal: ${successData.date}%0AJam: ${successData.time}%0ADurasi: ${successData.duration} Jam%0ATotal Biaya: Rp ${totalBiaya.toLocaleString('id-ID')}%0A%0AApakah slotnya tersedia?`;
+                const totalBiaya = successData.duration * getPricePerHour(successData.classType);
+                const tipeKelas = successData.classType === 'private' ? 'Private Class' : 'Open Class';
+                const message = `Halo Admin! Saya ${successData.name} mau request jadwal tenis:%0A%0AJenis Kelas: ${tipeKelas}%0ATanggal: ${successData.date}%0AJam: ${successData.time}%0ADurasi: ${successData.duration} Jam%0ATotal Biaya: Rp ${totalBiaya.toLocaleString('id-ID')}%0A%0AApakah slotnya tersedia?`;
                 window.open(`https://wa.me/${adminWhatsApp}?text=${message}`, '_blank');
-                setFormData({ name: '', wa: '', date: '', time: '', duration: 1 });
+                // Reset form setelah WA
+                setFormData({ classType: 'private', name: '', wa: '', date: '', time: '', duration: 1 });
                 setSuccessData(null);
             };
 
@@ -197,7 +199,10 @@
                                         <div className="flex items-center gap-2 mb-1"><Icon name="alert-triangle" size={14}/> INFO JADWAL</div>
                                         Weekend jadwal sangat sulit/penuh. Disarankan ambil Weekday. Jam sore paling direkomendasikan.
                                     </div>
-                                    <div className="text-4xl font-black italic text-navy">Rp 300.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam</span></div>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-4xl font-black italic text-navy">Rp 300.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam (Private)</span></div>
+                                        <div className="text-2xl font-black italic text-river">Rp 130.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam (Open Class)</span></div>
+                                    </div>
                                 </div>
 
                                 {successData ? (
@@ -210,8 +215,19 @@
                                 ) : (
                                     <form onSubmit={handleBooking} className="w-full md:w-[440px] bg-white rounded-[3rem] shadow-2xl p-8 md:p-10 space-y-6 border border-slate-100">
                                         <h2 className="text-xl font-black uppercase flex items-center gap-2 text-navy"><Icon name="calendar-days" className="text-river"/> Request Jadwal</h2>
-                                        <input required placeholder="Nama Lengkap" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-slate-200 focus:border-river font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                        
+                                        {/* Fitur Pilihan Jenis Kelas */}
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Jenis Kelas</label>
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={() => setFormData({...formData, classType: 'private'})} className={`flex-1 py-3 rounded-xl font-black transition ${formData.classType === 'private' ? 'bg-navy text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>Private</button>
+                                                <button type="button" onClick={() => setFormData({...formData, classType: 'open'})} className={`flex-1 py-3 rounded-xl font-black transition ${formData.classType === 'open' ? 'bg-navy text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>Open Class</button>
+                                            </div>
+                                        </div>
+
+                                        <input required placeholder="Nama Lengkap" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-slate-200 focus:border-river font-bold mt-2" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                                         <input required type="tel" placeholder="Nomor WhatsApp" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-slate-200 focus:border-river font-bold" value={formData.wa} onChange={e => setFormData({...formData, wa: e.target.value})} />
+                                        
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Tanggal</label>
@@ -232,8 +248,8 @@
                                         </div>
                                         <div className="bg-navy p-7 rounded-[2.5rem] text-white">
                                             <div className="flex justify-between font-black uppercase mb-5 border-b border-white/10 pb-3">
-                                                <span className="text-xs opacity-50">Total</span>
-                                                <span className="text-xl">Rp {(formData.duration * pricePerHour).toLocaleString('id-ID')}</span>
+                                                <span className="text-xs opacity-50 flex items-center">Total Biaya</span>
+                                                <span className="text-xl">Rp {(formData.duration * getPricePerHour(formData.classType)).toLocaleString('id-ID')}</span>
                                             </div>
                                             <div className="space-y-4">
                                                 <div className="bg-white/5 p-4 rounded-xl text-[11px] font-bold text-slate-300">{bankAccount}</div>
@@ -287,8 +303,9 @@
                                                 <div className="flex-1">
                                                     <h3 className="font-black text-2xl uppercase tracking-tight text-navy">{b.name}</h3>
                                                     <div className="flex flex-wrap gap-4 mt-2 text-[12px] font-bold text-slate-400 uppercase">
-                                                        <span className="bg-slate-50 px-3 py-1 rounded-full"><Icon name="clock" size={14} className="inline mb-0.5 mr-1"/> {b.time} ({b.duration}h)</span>
-                                                        <a href={`https://wa.me/${b.wa.replace(/^0/, '62')}`} target="_blank" className="text-river bg-blue-50 px-3 py-1 rounded-full hover:bg-river hover:text-white transition"><Icon name="phone" size={14} className="inline mb-0.5 mr-1"/> {b.wa}</a>
+                                                        <span className="bg-river text-white px-3 py-1 rounded-full flex items-center gap-1 shadow-sm"><Icon name="users" size={14}/> {b.classType === 'private' ? 'Private' : 'Open Class'}</span>
+                                                        <span className="bg-slate-50 px-3 py-1 rounded-full text-slate-500 border border-slate-200"><Icon name="clock" size={14} className="inline mb-0.5 mr-1"/> {b.time} ({b.duration}h)</span>
+                                                        <a href={`https://wa.me/${b.wa?.replace(/^0/, '62')}`} target="_blank" className="text-river bg-blue-50 px-3 py-1 rounded-full hover:bg-river hover:text-white transition"><Icon name="phone" size={14} className="inline mb-0.5 mr-1"/> {b.wa}</a>
                                                     </div>
                                                 </div>
                                             </div>
