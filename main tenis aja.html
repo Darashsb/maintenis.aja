@@ -1,0 +1,309 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAIN TENIS AJA - Booking System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // Komponen Ikon
+        const Icon = ({ name, size = 20, className = "" }) => {
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            });
+            return <i data-lucide={name} className={className} style={{width: size, height: size}}></i>;
+        };
+
+        const App = () => {
+            const [view, setView] = useState('client');
+            const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+            const [showPassError, setShowPassError] = useState(false);
+            const [showQrModal, setShowQrModal] = useState(false);
+            const [successData, setSuccessData] = useState(null);
+
+            // PASSWORD ADMIN
+            const ADMIN_PASSWORD = "darashsb6385"; 
+            
+            const pricePerHour = 300000;
+            const adminWhatsApp = "6281385516385";
+            const bankAccount = "Seabank 901703344188 a.n Dara Saliha Hasibuan";
+            
+            // File gambar QRIS lokal
+            const qrisImageUrl = "./qris.jpg";
+
+            const [bookings, setBookings] = useState(() => {
+                const saved = localStorage.getItem('tenis_bookings');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [formData, setFormData] = useState({
+                name: '', wa: '', date: '', time: '', duration: 1
+            });
+
+            useEffect(() => {
+                localStorage.setItem('tenis_bookings', JSON.stringify(bookings));
+                if (window.lucide) window.lucide.createIcons();
+            }, [bookings, view, successData, showQrModal]);
+
+            const handleAdminLogin = (e) => {
+                e.preventDefault();
+                if (passwordInput === ADMIN_PASSWORD) {
+                    setIsAdminAuthenticated(true);
+                    setView('admin');
+                    setShowPassError(false);
+                } else {
+                    setShowPassError(true);
+                }
+            };
+
+            const handleBooking = (e) => {
+                e.preventDefault();
+                // Simpan ke sistem
+                const newBooking = { ...formData, id: Date.now(), status: 'Menunggu Konfirmasi' };
+                setBookings([newBooking, ...bookings]);
+                
+                // Tampilkan layar sukses
+                setSuccessData(newBooking);
+            };
+
+            const handleWhatsApp = () => {
+                const totalBiaya = successData.duration * pricePerHour;
+                const message = `Halo Admin! Saya ${successData.name} mau request jadwal tenis:%0A%0ATanggal: ${successData.date}%0AJam: ${successData.time}%0ADurasi: ${successData.duration} Jam%0ATotal Biaya: Rp ${totalBiaya.toLocaleString('id-ID')}%0A%0AApakah slotnya tersedia?`;
+                window.open(`https://wa.me/${adminWhatsApp}?text=${message}`, '_blank');
+                
+                // Reset form
+                setFormData({ name: '', wa: '', date: '', time: '', duration: 1 });
+                setSuccessData(null);
+            };
+
+            // FUNGSI BARU: Hapus pesanan (Selesai / Batal)
+            const removeBooking = (id, isSelesai) => {
+                const pesan = isSelesai 
+                    ? 'Tandai pesanan ini selesai dan hapus dari daftar?' 
+                    : 'Yakin ingin membatalkan dan menghapus antrian ini?';
+                    
+                if(window.confirm(pesan)) {
+                    setBookings(bookings.filter(b => b.id !== id));
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Modal QRIS */}
+                    {showQrModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowQrModal(false)}>
+                            <div className="relative max-w-sm w-full bg-white rounded-3xl p-2 shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full hover:bg-black transition"><Icon name="x" /></button>
+                                <img src={qrisImageUrl} className="w-full h-auto rounded-2xl border border-slate-100" alt="QRIS DJABEADS" />
+                                <div className="p-4 text-center">
+                                    <div className="font-black uppercase tracking-tighter text-lg">QRIS DJABEADS</div>
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Scan untuk pembayaran</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <nav className="bg-emerald-600 text-white shadow-sm sticky top-0 z-50">
+                        <div className="max-w-5xl mx-auto px-6 py-5 flex justify-between items-center">
+                            <div className="text-2xl font-900 tracking-tighter uppercase cursor-pointer" onClick={() => {setView('client'); setSuccessData(null);}}>MAIN TENIS AJA</div>
+                            <div className="flex bg-black/10 p-1 rounded-full border border-white/10">
+                                <button onClick={() => {setView('client'); setSuccessData(null);}} className={`px-6 py-1.5 rounded-full text-xs font-bold transition ${view === 'client' ? 'bg-white text-emerald-700 shadow-sm' : ''}`}>Booking</button>
+                                <button onClick={() => isAdminAuthenticated ? setView('admin') : setView('login')} className={`px-6 py-1.5 rounded-full text-xs font-bold transition ${view === 'admin' || view === 'login' ? 'bg-white text-emerald-700 shadow-sm' : ''}`}>Admin</button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-5xl mx-auto p-6 md:p-10 flex-grow w-full">
+                        {view === 'client' && (
+                            <div className="flex flex-col md:flex-row gap-12 items-center md:items-start animate-fade-in">
+                                <div className="flex-1 space-y-8 py-4 text-center md:text-left">
+                                    <h1 className="text-6xl md:text-8xl font-black text-slate-900 leading-[0.85] tracking-tighter uppercase">MAIN<br/>TENIS<br/><span className="text-emerald-600">AJA.</span></h1>
+                                    <p className="text-lg text-slate-500 font-medium max-w-md mx-auto md:mx-0">Pilih jadwal latihanmu dengan Pak Putut. Klik kirim dan konfirmasi ke WhatsApp admin.</p>
+                                    <div className="bg-amber-50 border border-amber-100 p-5 rounded-2xl max-w-sm mx-auto md:mx-0 text-amber-700 text-xs font-bold uppercase leading-relaxed tracking-wider">
+                                        <div className="flex items-center gap-2 mb-1"><Icon name="alert-circle" size="16" /> Info Jadwal</div>
+                                        Weekday lebih disarankan untuk respon cepat.
+                                    </div>
+                                    <div className="text-4xl font-black italic">Rp 300.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam</span></div>
+                                </div>
+
+                                {successData ? (
+                                    <div className="w-full md:w-[440px] bg-white rounded-[2.5rem] shadow-xl border border-emerald-100 p-8 md:p-10 text-center animate-fade-in">
+                                        <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <Icon name="check-circle" size="48" />
+                                        </div>
+                                        <h2 className="text-2xl font-black uppercase tracking-tight mb-3">Tersimpan di Sistem!</h2>
+                                        <p className="text-slate-500 text-sm mb-6 font-medium leading-relaxed">
+                                            Jadwalmu sudah berhasil dicatat. Langkah terakhir, klik tombol di bawah untuk kirim konfirmasi ke WhatsApp Admin.
+                                        </p>
+                                        
+                                        <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl mb-8 text-left space-y-3">
+                                            <div className="flex justify-between border-b border-slate-200 pb-2">
+                                                <span className="text-[10px] font-black uppercase text-slate-400">Nama</span>
+                                                <span className="text-xs font-bold">{successData.name}</span>
+                                            </div>
+                                            <div className="flex justify-between border-b border-slate-200 pb-2">
+                                                <span className="text-[10px] font-black uppercase text-slate-400">Jadwal</span>
+                                                <span className="text-xs font-bold text-emerald-600">{successData.date} | {successData.time}</span>
+                                            </div>
+                                            <div className="flex justify-between pt-1">
+                                                <span className="text-[10px] font-black uppercase text-slate-400">Total</span>
+                                                <span className="text-sm font-black italic">Rp {(successData.duration * pricePerHour).toLocaleString('id-ID')}</span>
+                                            </div>
+                                        </div>
+
+                                        <button onClick={handleWhatsApp} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl shadow-lg hover:bg-emerald-700 transition transform hover:-translate-y-1 flex items-center justify-center gap-2 uppercase text-lg tracking-tighter">
+                                            Lanjut ke WhatsApp <Icon name="arrow-right" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full md:w-[440px] bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 md:p-10 animate-fade-in">
+                                        <h2 className="text-xl font-black mb-8 flex items-center gap-2 uppercase tracking-tight"><div className="text-emerald-500"><Icon name="calendar-plus" /></div> Request Jadwal</h2>
+                                        <form onSubmit={handleBooking} className="space-y-6">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Nama Lengkap</label>
+                                                <input required className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-400 outline-none transition font-medium" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">WhatsApp</label>
+                                                <input required type="tel" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 focus:ring-2 focus:ring-emerald-400 outline-none transition font-medium" value={formData.wa} onChange={e => setFormData({...formData, wa: e.target.value})} />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Tanggal</label>
+                                                    <input required type="date" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-medium" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Jam Mulai</label>
+                                                    <input required type="time" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-medium" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Durasi</label>
+                                                <div className="flex gap-2">
+                                                    {[1, 2, 3].map(h => (
+                                                        <button key={h} type="button" onClick={() => setFormData({...formData, duration: h})} className={`flex-1 py-3 rounded-xl font-black text-sm transition ${formData.duration === h ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>{h} Jam</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="p-6 bg-slate-900 rounded-[2rem] text-white space-y-4">
+                                                <div className="flex justify-between items-center border-b border-white/10 pb-3 font-black uppercase italic">
+                                                    <span className="text-[10px] opacity-50">Total Bayar</span>
+                                                    <span className="text-xl">Rp {(formData.duration * pricePerHour).toLocaleString('id-ID')}</span>
+                                                </div>
+                                                <div className="space-y-3 pt-1">
+                                                    <p className="text-[10px] font-black uppercase opacity-50 tracking-widest">Info Rekening:</p>
+                                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-[11px] font-bold">{bankAccount}</div>
+                                                    <button type="button" onClick={() => setShowQrModal(true)} className="w-full py-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-500/30 transition">
+                                                        <Icon name="qr-code" size="16" /> Tampilkan QRIS DJABEADS
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button type="submit" className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl shadow-lg hover:bg-emerald-700 transition transform hover:-translate-y-1 flex items-center justify-center gap-2 uppercase text-lg tracking-tighter">Pesan Jadwal <Icon name="save" /></button>
+                                        </form>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'login' && (
+                            <div className="max-w-md mx-auto mt-20 p-10 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 text-center animate-fade-in">
+                                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6"><Icon name="lock" size="32" /></div>
+                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-8">Admin Access</h2>
+                                <form onSubmit={handleAdminLogin} className="space-y-4">
+                                    <input type="password" placeholder="Password Admin" className="w-full bg-slate-50 border rounded-2xl p-4 text-center font-bold outline-none focus:ring-2 focus:ring-emerald-400" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
+                                    {showPassError && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest">Password Salah!</p>}
+                                    <button className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-xs">Unlock Dashboard</button>
+                                </form>
+                            </div>
+                        )}
+
+                        {view === 'admin' && (
+                            <div className="space-y-8 animate-fade-in">
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">Admin<br/>Dashboard</h2>
+                                        <button onClick={() => setIsAdminAuthenticated(false)} className="text-[10px] font-black text-red-400 uppercase mt-2 flex items-center gap-1 hover:underline"><Icon name="unlock" size="12" /> Logout</button>
+                                    </div>
+                                    <div className="bg-white px-6 py-4 rounded-3xl border border-slate-100 text-right">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Antrian</p>
+                                        <p className="text-2xl font-black">{bookings.length}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {bookings.map(b => (
+                                        <div key={b.id} className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden transition">
+                                            <div className={`absolute left-0 inset-y-0 w-1.5 ${b.status === 'Jadwal Aman' ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                                            <div className="flex-1 flex gap-6 items-center w-full">
+                                                <div className="bg-slate-50 p-4 rounded-2xl text-center min-w-[80px] font-black uppercase">
+                                                    <div className="text-lg">{b.date.split('-')[2]}</div>
+                                                    <div className="text-[8px] text-slate-400">{new Date(b.date).toLocaleString('id-ID', {month: 'short'})}</div>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h3 className="font-black text-xl uppercase tracking-tight">{b.name}</h3>
+                                                    <div className="flex gap-4 mt-1 text-[10px] font-bold text-slate-400 uppercase">
+                                                        <span><Icon name="clock" size="12" className="inline mb-0.5"/> {b.time} ({b.duration} Jam)</span>
+                                                        <a href={`https://wa.me/${b.wa.replace(/^0/, '62')}`} target="_blank" className="text-emerald-600 hover:underline"><Icon name="message-circle" size="12" className="inline mb-0.5"/> {b.wa}</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col md:flex-row items-center gap-4">
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setBookings(bookings.map(item => item.id === b.id ? {...item, status: 'Menunggu Konfirmasi'} : item))} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition border ${b.status === 'Menunggu Konfirmasi' ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>Menunggu</button>
+                                                    <button onClick={() => setBookings(bookings.map(item => item.id === b.id ? {...item, status: 'Jadwal Aman'} : item))} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition border ${b.status === 'Jadwal Aman' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>Aman</button>
+                                                </div>
+                                                <div className="h-8 w-[1px] bg-slate-200 hidden md:block"></div>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => removeBooking(b.id, true)} className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition flex items-center gap-1 bg-slate-900 text-white hover:bg-emerald-600 shadow-md">
+                                                        <Icon name="check-circle" size="14" /> Tandai Selesai
+                                                    </button>
+                                                    <button onClick={() => removeBooking(b.id, false)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="Hapus / Batal">
+                                                        <Icon name="trash-2" size="20" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {bookings.length === 0 && <p className="text-center py-20 text-slate-300 font-black uppercase tracking-widest">Belum ada request yang antri.</p>}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-16 bg-slate-900 text-white text-center">
+                        <div className="text-xl font-black uppercase tracking-tighter mb-4">MAIN TENIS AJA</div>
+                        <p className="text-[10px] font-black text-white/20 uppercase tracking-widest italic">Management System v1.2</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+
+```
