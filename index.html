@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAIN TENIS AJA - Booking System</title>
+    <title>MAIN TENIS AJA - Premium Booking</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -12,19 +12,32 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* River Blue */
+        .bg-river { background-color: #3b82f6; } /* Royal/River Blue */
+        .text-river { color: #1e3a8a; }
+        .border-river { border-color: #3b82f6; }
+        
+        /* Highland Green */
+        .bg-highland { background-color: #1b5e20; }
+        .text-highland { color: #1b5e20; }
+        .border-highland { border-color: #1b5e20; }
+
+        /* Dark Navy for Nav */
+        .bg-navy { background-color: #0f172a; }
     </style>
 </head>
-<body class="bg-[#f8fafc] text-slate-900">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
         
-        // KONFIGURASI DATABASE FIREBASE
-        const DATABASE_URL = "https://main-tenis-database-default-rtdb.firebaseio.com/bookings.json";
+        // URL Database Firebase
+        const BASE_DB_URL = "https://main-tenis-database-default-rtdb.firebaseio.com/bookings";
 
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
@@ -49,9 +62,10 @@
 
             const [formData, setFormData] = useState({ name: '', wa: '', date: '', time: '', duration: 1 });
 
-            const fetchBookings = async () => {
+            // Ambil data dari Firebase
+            const fetchBookings = useCallback(async () => {
                 try {
-                    const response = await fetch(DATABASE_URL);
+                    const response = await fetch(`${BASE_DB_URL}.json`);
                     const data = await response.json();
                     if (data) {
                         const loadedBookings = Object.keys(data).map(key => ({
@@ -63,15 +77,15 @@
                         setBookings([]);
                     }
                 } catch (error) {
-                    console.error("Gagal sinkronisasi data.");
+                    console.error("Gagal mengambil data antrean.");
                 }
-            };
+            }, []);
 
             useEffect(() => {
                 fetchBookings();
-                const interval = setInterval(fetchBookings, 8000);
+                const interval = setInterval(fetchBookings, 5000);
                 return () => clearInterval(interval);
-            }, []);
+            }, [fetchBookings]);
 
             const handleAdminLogin = (e) => {
                 e.preventDefault();
@@ -90,8 +104,9 @@
                 const newBooking = { ...formData, timestamp: Date.now(), status: 'Menunggu Konfirmasi' };
                 
                 try {
-                    const response = await fetch(DATABASE_URL, {
+                    const response = await fetch(`${BASE_DB_URL}.json`, {
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newBooking)
                     });
                     if (response.ok) {
@@ -99,26 +114,46 @@
                         fetchBookings();
                     }
                 } catch (error) {
-                    alert("Gagal terhubung ke database.");
+                    alert("Koneksi bermasalah.");
                 }
                 setIsLoading(false);
             };
 
+            // Update Status (Optimistic UI)
             const updateStatus = async (id, newStatus) => {
-                const singleUrl = `https://main-tenis-database-default-rtdb.firebaseio.com/bookings/${id}.json`;
-                await fetch(singleUrl, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ status: newStatus })
-                });
-                fetchBookings();
+                const oldBookings = [...bookings];
+                setBookings(bookings.map(b => b.id === id ? {...b, status: newStatus} : b));
+
+                try {
+                    await fetch(`${BASE_DB_URL}/${id}.json`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                } catch (err) {
+                    setBookings(oldBookings);
+                    alert("Gagal memperbarui status.");
+                }
             };
 
+            // Benar-benar menghapus antrean dari Firebase
             const deleteBooking = async (id, isSelesai = false) => {
-                const confirmMsg = isSelesai ? "Tandai pesanan selesai dan hapus dari antrian?" : "Hapus pesanan ini secara permanen?";
+                const confirmMsg = isSelesai ? "Tandai selesai & hapus permanen?" : "Hapus pesanan ini secara permanen?";
                 if(window.confirm(confirmMsg)) {
-                    const singleUrl = `https://main-tenis-database-default-rtdb.firebaseio.com/bookings/${id}.json`;
-                    await fetch(singleUrl, { method: 'DELETE' });
-                    fetchBookings();
+                    const oldBookings = [...bookings];
+                    // Update tampilan lokal dulu biar cepet
+                    setBookings(bookings.filter(b => b.id !== id));
+
+                    try {
+                        const response = await fetch(`${BASE_DB_URL}/${id}.json`, { 
+                            method: 'DELETE' 
+                        });
+                        if (!response.ok) throw new Error();
+                    } catch (err) {
+                        // Kalo gagal hapus di server, balikin tampilan lokalnya
+                        setBookings(oldBookings);
+                        alert("Gagal menghapus antrean dari server.");
+                    }
                 }
             };
 
@@ -134,21 +169,21 @@
                 <div className="min-h-screen flex flex-col">
                     {/* Modal QRIS */}
                     {showQrModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowQrModal(false)}>
-                            <div className="relative max-w-sm w-full bg-white rounded-3xl p-2 animate-fade-in" onClick={e => e.stopPropagation()}>
-                                <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full"><Icon name="x"/></button>
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-navy/90 backdrop-blur-sm" onClick={() => setShowQrModal(false)}>
+                            <div className="relative max-w-sm w-full bg-white rounded-3xl p-2 animate-fade-in shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 bg-navy/50 text-white p-2 rounded-full"><Icon name="x"/></button>
                                 <img src={qrisImageUrl} className="w-full h-auto rounded-2xl" alt="QRIS" />
-                                <div className="p-4 text-center font-black uppercase tracking-tight">QRIS DJABEADS</div>
+                                <div className="p-4 text-center font-black uppercase text-navy">QRIS DJABEADS</div>
                             </div>
                         </div>
                     )}
 
-                    <nav className="bg-emerald-600 text-white shadow-lg sticky top-0 z-50">
+                    <nav className="bg-navy text-white shadow-xl sticky top-0 z-50">
                         <div className="max-w-5xl mx-auto px-6 py-5 flex justify-between items-center">
                             <div className="text-2xl font-900 tracking-tighter uppercase cursor-pointer" onClick={() => {setView('client'); setSuccessData(null);}}>MAIN TENIS AJA</div>
-                            <div className="flex bg-black/10 p-1 rounded-full border border-white/10">
-                                <button onClick={() => {setView('client'); setSuccessData(null);}} className={`px-6 py-1.5 rounded-full text-xs font-bold transition ${view === 'client' ? 'bg-white text-emerald-700 shadow-sm' : ''}`}>Booking</button>
-                                <button onClick={() => isAdminAuthenticated ? setView('admin') : setView('login')} className={`px-6 py-1.5 rounded-full text-xs font-bold transition ${view !== 'client' ? 'bg-white text-emerald-700 shadow-sm' : ''}`}>Admin</button>
+                            <div className="flex bg-white/10 p-1 rounded-xl">
+                                <button onClick={() => {setView('client'); setSuccessData(null);}} className={`px-5 py-2 rounded-lg text-xs font-bold transition ${view === 'client' ? 'bg-river text-white shadow-lg' : 'hover:bg-white/5'}`}>Booking</button>
+                                <button onClick={() => isAdminAuthenticated ? setView('admin') : setView('login')} className={`px-5 py-2 rounded-lg text-xs font-bold transition ${view !== 'client' ? 'bg-river text-white shadow-lg' : 'hover:bg-white/5'}`}>Admin</button>
                             </div>
                         </div>
                     </nav>
@@ -157,63 +192,58 @@
                         {view === 'client' && (
                             <div className="flex flex-col md:flex-row gap-12 items-start animate-fade-in">
                                 <div className="flex-1 space-y-8 text-center md:text-left">
-                                    <h1 className="text-6xl md:text-8xl font-black leading-[0.85] tracking-tighter uppercase">MAIN<br/>TENIS<br/><span className="text-emerald-600">AJA.</span></h1>
-                                    <div className="bg-red-50 border border-red-100 p-5 rounded-2xl text-red-700 text-xs font-bold uppercase tracking-wider max-w-sm mx-auto md:mx-0">
+                                    <h1 className="text-6xl md:text-8xl font-black leading-[0.85] tracking-tighter uppercase text-navy">MAIN<br/>TENIS<br/><span className="text-highland">AJA.</span></h1>
+                                    <div className="bg-red-600 text-white p-5 rounded-2xl text-xs font-bold uppercase tracking-wider max-w-sm mx-auto md:mx-0 shadow-lg">
                                         <div className="flex items-center gap-2 mb-1"><Icon name="alert-triangle" size={14}/> INFO JADWAL</div>
-                                        Weekend jadwal sangat sulit penuh. Disarankan ambil Weekday. Jam sore paling direkomendasikan.
+                                        Weekend jadwal sangat sulit/penuh. Disarankan ambil Weekday. Jam sore paling direkomendasikan.
                                     </div>
-                                    <div className="text-4xl font-black italic">Rp 300.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam</span></div>
+                                    <div className="text-4xl font-black italic text-navy">Rp 300.000 <span className="text-sm font-bold text-slate-400 uppercase not-italic">/ Jam</span></div>
                                 </div>
 
                                 {successData ? (
-                                    <div className="w-full md:w-[440px] bg-white rounded-[2.5rem] shadow-xl p-10 text-center border-2 border-emerald-500 animate-fade-in">
-                                        <div className="text-emerald-500 mb-6 flex justify-center"><Icon name="check-circle" size={80} /></div>
-                                        <h2 className="text-2xl font-black uppercase mb-3">Pesanan Terkirim!</h2>
-                                        <p className="text-sm text-slate-500 mb-8 font-medium">Jadwal kamu sudah masuk ke sistem kami. Klik tombol di bawah untuk konfirmasi WhatsApp.</p>
-                                        <div className="bg-slate-50 p-4 rounded-2xl mb-8 text-left space-y-2 text-xs font-bold uppercase">
-                                            <div className="flex justify-between border-b border-slate-200 pb-2"><span>Nama</span><span>{successData.name}</span></div>
-                                            <div className="flex justify-between"><span>Total</span><span>Rp {(successData.duration * pricePerHour).toLocaleString('id-ID')}</span></div>
-                                        </div>
-                                        <button onClick={handleWhatsApp} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-2 uppercase text-lg shadow-lg">Kirim ke WhatsApp <Icon name="arrow-right" /></button>
+                                    <div className="w-full md:w-[440px] bg-white rounded-[2.5rem] shadow-2xl p-10 text-center border-t-8 border-highland animate-fade-in">
+                                        <div className="text-highland mb-6 flex justify-center"><Icon name="check-circle" size={80} /></div>
+                                        <h2 className="text-2xl font-black uppercase mb-3 text-navy">Terkirim!</h2>
+                                        <p className="text-sm text-slate-500 mb-8 font-medium">Data sudah masuk. Klik tombol WhatsApp untuk konfirmasi ke admin.</p>
+                                        <button onClick={handleWhatsApp} className="w-full bg-highland text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 uppercase text-lg shadow-xl hover:scale-[1.02] active:scale-95 transition">WhatsApp Admin <Icon name="message-circle" /></button>
                                     </div>
                                 ) : (
                                     <form onSubmit={handleBooking} className="w-full md:w-[440px] bg-white rounded-[3rem] shadow-2xl p-8 md:p-10 space-y-6 border border-slate-100">
-                                        <h2 className="text-xl font-black uppercase flex items-center gap-2"><Icon name="calendar-plus" className="text-emerald-500"/> Request Jadwal</h2>
-                                        <input required placeholder="Nama Lengkap" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400 font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                                        <input required type="tel" placeholder="Nomor WhatsApp" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-400 font-bold" value={formData.wa} onChange={e => setFormData({...formData, wa: e.target.value})} />
+                                        <h2 className="text-xl font-black uppercase flex items-center gap-2 text-navy"><Icon name="calendar-days" className="text-river"/> Request Jadwal</h2>
+                                        <input required placeholder="Nama Lengkap" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-slate-200 focus:border-river font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                        <input required type="tel" placeholder="Nomor WhatsApp" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-slate-200 focus:border-river font-bold" value={formData.wa} onChange={e => setFormData({...formData, wa: e.target.value})} />
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Tanggal</label>
-                                                <input required type="date" className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                                                <input required type="date" className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm border border-slate-200" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Jam Mulai</label>
-                                                <input required type="time" className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Jam</label>
+                                                <input required type="time" className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm border border-slate-200" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
                                             </div>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Durasi</label>
                                             <div className="flex gap-2">
                                                 {[1, 2, 3].map(h => (
-                                                    <button key={h} type="button" onClick={() => setFormData({...formData, duration: h})} className={`flex-1 py-3 rounded-xl font-black transition ${formData.duration === h ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-300'}`}>{h} Jam</button>
+                                                    <button key={h} type="button" onClick={() => setFormData({...formData, duration: h})} className={`flex-1 py-3 rounded-xl font-black transition ${formData.duration === h ? 'bg-navy text-white' : 'bg-slate-50 text-slate-300 border border-slate-200'}`}>{h} Jam</button>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white">
-                                            <div className="flex justify-between font-black uppercase italic mb-5 border-b border-white/10 pb-3">
+                                        <div className="bg-navy p-7 rounded-[2.5rem] text-white">
+                                            <div className="flex justify-between font-black uppercase mb-5 border-b border-white/10 pb-3">
                                                 <span className="text-xs opacity-50">Total</span>
                                                 <span className="text-xl">Rp {(formData.duration * pricePerHour).toLocaleString('id-ID')}</span>
                                             </div>
                                             <div className="space-y-4">
-                                                <p className="text-[10px] font-black uppercase opacity-50 tracking-widest">Info Rekening:</p>
-                                                <div className="bg-white/5 p-4 rounded-xl border border-white/5 text-[11px] font-bold leading-relaxed">{bankAccount}</div>
-                                                <button type="button" onClick={() => setShowQrModal(true)} className="w-full py-3 bg-emerald-500/20 rounded-xl text-emerald-400 font-black text-[10px] uppercase tracking-widest border border-emerald-500/30 flex items-center justify-center gap-2">
-                                                    <Icon name="qr-code" size={14}/> Tampilkan QRIS
+                                                <div className="bg-white/5 p-4 rounded-xl text-[11px] font-bold text-slate-300">{bankAccount}</div>
+                                                <button type="button" onClick={() => setShowQrModal(true)} className="w-full py-3 bg-river rounded-xl text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
+                                                    <Icon name="qr-code" size={14}/> Scan QRIS
                                                 </button>
                                             </div>
                                         </div>
-                                        <button disabled={isLoading} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl uppercase tracking-tighter hover:bg-emerald-700 transition transform hover:-translate-y-1 shadow-lg">
-                                            {isLoading ? "Mengirim Data..." : "Pesan Sekarang"}
+                                        <button disabled={isLoading} className="w-full bg-highland text-white font-black py-5 rounded-2xl uppercase tracking-tighter hover:opacity-90 transition shadow-xl text-lg">
+                                            {isLoading ? "Mengirim..." : "Pesan Slot Sekarang"}
                                         </button>
                                     </form>
                                 )}
@@ -221,57 +251,57 @@
                         )}
 
                         {view === 'login' && (
-                            <div className="max-w-md mx-auto mt-20 p-12 bg-white rounded-[3rem] shadow-2xl text-center border border-slate-100 animate-fade-in">
-                                <div className="bg-emerald-100 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"><Icon name="lock" size={32}/></div>
-                                <h2 className="text-2xl font-black uppercase mb-8">Admin Access</h2>
+                            <div className="max-w-md mx-auto mt-20 p-12 bg-white rounded-[3rem] shadow-2xl text-center border-t-8 border-navy animate-fade-in">
+                                <div className="bg-slate-100 text-navy w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"><Icon name="shield" size={32}/></div>
+                                <h2 className="text-2xl font-black uppercase mb-8 text-navy">Admin Access</h2>
                                 <form onSubmit={handleAdminLogin} className="space-y-4">
-                                    <input type="password" placeholder="Password Admin" className="w-full bg-slate-50 p-4 rounded-2xl text-center font-bold outline-none focus:ring-2 focus:ring-emerald-400" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
+                                    <input type="password" placeholder="Password" className="w-full bg-slate-50 p-4 rounded-2xl text-center font-bold outline-none border border-slate-200 focus:border-river" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} />
                                     {showPassError && <p className="text-red-500 text-[10px] font-black uppercase">Password Salah!</p>}
-                                    <button className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-xs">Unlock Dashboard</button>
+                                    <button className="w-full bg-navy text-white font-black py-4 rounded-2xl uppercase tracking-widest text-xs active:scale-95 transition">Unlock</button>
                                 </form>
                             </div>
                         )}
 
                         {view === 'admin' && (
                             <div className="space-y-8 animate-fade-in">
-                                <div className="flex justify-between items-end">
+                                <div className="flex justify-between items-end bg-navy p-8 rounded-[3rem] text-white shadow-2xl">
                                     <div>
-                                        <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">Admin<br/>Dashboard</h2>
-                                        <button onClick={() => setIsAdminAuthenticated(false)} className="text-[10px] font-black text-red-400 uppercase mt-2 flex items-center gap-1"><Icon name="log-out" size={12}/> Logout</button>
+                                        <h2 className="text-4xl font-black uppercase tracking-tighter leading-none mb-2">Antrean<br/>Pesanan</h2>
+                                        <button onClick={() => setIsAdminAuthenticated(false)} className="bg-white/10 px-4 py-2 rounded-lg text-[10px] font-black uppercase hover:bg-red-500 transition flex items-center gap-2"><Icon name="log-out" size={12}/> Keluar</button>
                                     </div>
-                                    <div className="bg-white px-8 py-5 rounded-3xl border border-slate-100 shadow-sm text-right">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Antrian</p>
-                                        <p className="text-3xl font-black">{bookings.length}</p>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black uppercase opacity-50 tracking-widest">Total</p>
+                                        <p className="text-5xl font-black text-river leading-none">{bookings.length}</p>
                                     </div>
                                 </div>
-                                <div className="grid gap-4">
+
+                                <div className="grid gap-5">
                                     {bookings.map(b => (
-                                        <div key={b.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-                                            <div className={`absolute left-0 inset-y-0 w-2 ${b.status === 'Jadwal Aman' ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                                        <div key={b.id} className="bg-white p-6 rounded-[2.5rem] shadow-md border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden transition-all hover:shadow-lg">
+                                            <div className={`absolute left-0 inset-y-0 w-3 ${b.status === 'Jadwal Aman' ? 'bg-highland' : (b.status === 'Menunggu Konfirmasi' ? 'bg-amber-400' : 'bg-slate-300')}`}></div>
                                             <div className="flex-1 flex gap-6 items-center w-full">
-                                                <div className="bg-slate-50 p-4 rounded-2xl text-center min-w-[90px] font-black uppercase">
-                                                    <div className="text-xl">{b.date?.split('-')[2]}</div>
-                                                    <div className="text-[10px] text-slate-400">{new Date(b.date).toLocaleString('id-ID', {month: 'short'})}</div>
+                                                <div className="bg-slate-100 p-5 rounded-2xl text-center min-w-[100px] font-black uppercase border border-slate-200">
+                                                    <div className="text-2xl text-navy">{b.date?.split('-')[2]}</div>
+                                                    <div className="text-[11px] text-slate-400 uppercase">{new Date(b.date).toLocaleString('id-ID', {month: 'short'})}</div>
                                                 </div>
                                                 <div className="flex-1">
-                                                    <h3 className="font-black text-xl uppercase tracking-tight">{b.name}</h3>
-                                                    <div className="flex gap-4 mt-1 text-[11px] font-bold text-slate-400 uppercase">
-                                                        <span><Icon name="clock" size={14} className="inline mb-0.5"/> {b.time} ({b.duration} Jam)</span>
-                                                        <a href={`https://wa.me/${b.wa.replace(/^0/, '62')}`} target="_blank" className="text-emerald-600 hover:underline"><Icon name="message-circle" size={14} className="inline mb-0.5"/> {b.wa}</a>
+                                                    <h3 className="font-black text-2xl uppercase tracking-tight text-navy">{b.name}</h3>
+                                                    <div className="flex flex-wrap gap-4 mt-2 text-[12px] font-bold text-slate-400 uppercase">
+                                                        <span className="bg-slate-50 px-3 py-1 rounded-full"><Icon name="clock" size={14} className="inline mb-0.5 mr-1"/> {b.time} ({b.duration}h)</span>
+                                                        <a href={`https://wa.me/${b.wa.replace(/^0/, '62')}`} target="_blank" className="text-river bg-blue-50 px-3 py-1 rounded-full hover:bg-river hover:text-white transition"><Icon name="phone" size={14} className="inline mb-0.5 mr-1"/> {b.wa}</a>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col md:flex-row items-center gap-4">
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => updateStatus(b.id, 'Menunggu Konfirmasi')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition border ${b.status === 'Menunggu Konfirmasi' ? 'bg-amber-100 border-amber-200 text-amber-700' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>Menunggu</button>
-                                                    <button onClick={() => updateStatus(b.id, 'Jadwal Aman')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition border ${b.status === 'Jadwal Aman' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>Aman</button>
+                                            <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                                                <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
+                                                    <button onClick={() => updateStatus(b.id, 'Menunggu Konfirmasi')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${b.status === 'Menunggu Konfirmasi' ? 'bg-amber-400 text-navy shadow-md' : 'bg-slate-50 text-slate-300 border border-slate-200'}`}>Menunggu</button>
+                                                    <button onClick={() => updateStatus(b.id, 'Jadwal Aman')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${b.status === 'Jadwal Aman' ? 'bg-highland text-white shadow-md' : 'bg-slate-50 text-slate-300 border border-slate-200'}`}>Aman</button>
                                                 </div>
-                                                <div className="h-8 w-[1px] bg-slate-200 hidden md:block"></div>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => deleteBooking(b.id, true)} className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition flex items-center gap-1 bg-slate-900 text-white hover:bg-emerald-600 shadow-md">
+                                                <div className="flex items-center gap-2 w-full md:w-auto">
+                                                    <button onClick={() => deleteBooking(b.id, true)} className="flex-1 md:flex-none px-6 py-3 rounded-xl text-[11px] font-black uppercase bg-navy text-white hover:bg-highland transition shadow-lg flex items-center justify-center gap-2 active:scale-95">
                                                         <Icon name="check" size={16} /> Selesai
                                                     </button>
-                                                    <button onClick={() => deleteBooking(b.id, false)} className="p-2.5 text-slate-200 hover:text-red-500 transition">
+                                                    <button onClick={() => deleteBooking(b.id, false)} className="p-3 text-slate-300 hover:text-red-500 transition-colors bg-slate-50 rounded-xl border border-slate-100">
                                                         <Icon name="trash-2" size={20} />
                                                     </button>
                                                 </div>
@@ -279,9 +309,9 @@
                                         </div>
                                     ))}
                                     {bookings.length === 0 && (
-                                        <div className="text-center py-24 text-slate-300">
-                                            <Icon name="inbox" size={48} className="mx-auto mb-4 opacity-20"/>
-                                            <p className="font-black uppercase tracking-widest">Belum ada pesanan masuk</p>
+                                        <div className="text-center py-28 text-slate-300 bg-white rounded-[3rem] border-4 border-dashed border-slate-100">
+                                            <Icon name="layout-list" size={60} className="mx-auto mb-4 opacity-10"/>
+                                            <p className="font-black uppercase tracking-widest text-sm">Antrean Kosong</p>
                                         </div>
                                     )}
                                 </div>
@@ -289,9 +319,9 @@
                         )}
                     </main>
 
-                    <footer className="py-12 bg-slate-900 text-white text-center border-t border-white/5">
-                        <div className="text-xl font-black uppercase tracking-tighter mb-2 opacity-50">MAIN TENIS AJA</div>
-                        <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em]">Powered by Firebase Realtime Database</p>
+                    <footer className="py-12 bg-navy text-white/30 text-center">
+                        <div className="text-xl font-black uppercase tracking-tighter mb-2">MAIN TENIS AJA</div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.4em]">Realtime Sync Active</p>
                     </footer>
                 </div>
             );
